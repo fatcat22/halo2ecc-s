@@ -227,6 +227,89 @@ impl NativeScalarEccContext<G1Affine> {
         f
     }
 
+    fn multi_miller_loop_c_wi(
+        &mut self,
+        c:&AssignedFq12<Fq,Fr>, wi:&AssignedFq12<Fq,Fr>,
+        terms: &[(
+            &AssignedG1Affine<G1Affine, Fr>,
+            &AssignedG2Prepared<G1Affine, Fr>,
+        )],
+    ) -> AssignedFq12<Fq, Fr> {
+        let mut pairs = vec![];
+        for &(p, q) in terms {
+            // not support identity
+            self.base_integer_chip().base_chip().assert_false(&p.z);
+            pairs.push((p, q.coeffs.iter()));
+        }
+
+        let c_inv = self.fq12_unsafe_invert(c);
+        //todo clone is ok?
+        //f=c_inv
+        let mut f = self.fq12_unsafe_invert(c);
+
+        for i in (1..SIX_U_PLUS_2_NAF.len()).rev() {
+            f = self.fq12_square(&f);
+
+            let x = SIX_U_PLUS_2_NAF[i - 1];
+            // update c_inv
+            // f = f * c_inv, if digit == 1
+            // f = f * c, if digit == -1
+            match x {
+                1 => {
+                    f = self.fq12_mul(&f,&c_inv)
+                }
+                -1 => {
+                    f = self.fq12_mul(&f, &c)
+                }
+                _ => {},
+            }
+
+            for &mut (p, ref mut coeffs) in &mut pairs {
+                f = self.ell(&f, coeffs.next().unwrap(), &p);
+            }
+            match x {
+                1 => {
+                    for &mut (p, ref mut coeffs) in &mut pairs {
+                        f = self.ell(&f, coeffs.next().unwrap(), &p);
+                    }
+                }
+                -1 => {
+                    for &mut (p, ref mut coeffs) in &mut pairs {
+                        f = self.ell(&f, coeffs.next().unwrap(), &p);
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        // update c_inv^p^i part
+        // f = f * c_inv^p * c^{p^2} * c_inv^{p^3}
+        let c_inv_p = self.fq12_frobenius_map(&c_inv, 1);
+        let c_inv_p3 = self.fq12_frobenius_map(&c_inv, 3);
+        let c_p2 = self.fq12_frobenius_map(&c, 2);
+        f = self.fq12_mul(&f, &c_inv_p);
+        f = self.fq12_mul(&f, &c_p2);
+        f = self.fq12_mul(&f, &c_inv_p3);
+
+        // scale f
+        // f = f * wi
+        f = self.fq12_mul(&f, &wi);
+
+        for &mut (p, ref mut coeffs) in &mut pairs {
+            f = self.ell(&f, coeffs.next().unwrap(), &p);
+        }
+
+        for &mut (p, ref mut coeffs) in &mut pairs {
+            f = self.ell(&f, coeffs.next().unwrap(), &p);
+        }
+
+        for &mut (_p, ref mut coeffs) in &mut pairs {
+            assert!(coeffs.next().is_none());
+        }
+
+        f
+    }
+
     fn exp_by_x(&mut self, f: &AssignedFq12<Fq, Fr>) -> AssignedFq12<Fq, Fr> {
         let x = BN_X;
         let mut res = self.fq12_assign_one();
@@ -339,6 +422,15 @@ impl PairingChipOps<G1Affine, Fr> for NativeScalarEccContext<G1Affine> {
         )],
     ) -> AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr> {
         self.multi_miller_loop(terms)
+    }
+
+    fn multi_miller_loop_c_wi(
+        &mut self,
+        c:&AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
+        wi:&AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
+        terms: &[(&AssignedG1Affine<G1Affine, Fr>, &AssignedG2Prepared<G1Affine, Fr>)],
+    ) -> AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>{
+        self.multi_miller_loop_c_wi(c,wi,terms)
     }
 
     fn final_exponentiation(

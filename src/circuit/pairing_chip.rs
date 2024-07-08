@@ -152,6 +152,13 @@ pub trait PairingChipOps<C: CurveAffine, N: FieldExt>:
         terms: &[(&AssignedG1Affine<C, N>, &AssignedG2Prepared<C, N>)],
     ) -> AssignedFq12<C::Base, N>;
 
+    //todo add new trait for c_wi api to avoid bls_381?
+    fn multi_miller_loop_c_wi(
+        &mut self,
+        c:&AssignedFq12<C::Base,N>, wi:&AssignedFq12<C::Base,N>,
+        terms: &[(&AssignedG1Affine<C, N>, &AssignedG2Prepared<C, N>)],
+    ) -> AssignedFq12<C::Base, N>;
+
     fn final_exponentiation(&mut self, f: &AssignedFq12<C::Base, N>) -> AssignedFq12<C::Base, N>;
 
     fn pairing(
@@ -170,8 +177,29 @@ pub trait PairingChipOps<C: CurveAffine, N: FieldExt>:
         self.final_exponentiation(&res)
     }
 
+    fn pairing_c_wi(
+        &mut self,
+        c:&AssignedFq12<C::Base,N>, wi:&AssignedFq12<C::Base,N>,
+        terms: &[(&AssignedG1Affine<C, N>, &AssignedG2Affine<C, N>)],
+    ) -> AssignedFq12<C::Base, N> {
+        let prepared_terms = terms
+            .iter()
+            .map(|(p, q)| (*p, self.prepare_g2(q)))
+            .collect::<Vec<_>>();
+        let terms = prepared_terms
+            .iter()
+            .map(|(p, q)| (*p, q))
+            .collect::<Vec<_>>();
+        self.multi_miller_loop_c_wi(c,wi,&terms[..])
+    }
+
     fn check_pairing(&mut self, terms: &[(&AssignedG1Affine<C, N>, &AssignedG2Affine<C, N>)]) {
         let res = self.pairing(terms);
+        self.fq12_assert_one(&res);
+    }
+
+    fn check_pairing_c_wi(&mut self, c:&AssignedFq12<C::Base,N>, wi:&AssignedFq12<C::Base,N>,terms: &[(&AssignedG1Affine<C, N>, &AssignedG2Affine<C, N>)]) {
+        let res = self.pairing_c_wi(c,wi,terms);
         self.fq12_assert_one(&res);
     }
 }
