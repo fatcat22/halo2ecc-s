@@ -693,7 +693,7 @@ dependencies = [
 [[package]]
 name = "pairing_bn256"
 version = "0.1.1"
-source = "git+https://github.com/mooreland/pairing?branch=paring_with_c_wi#f73c0848f0b304145f337e4cd7b90c3c541c6823"
+source = "git+https://github.com/mooreland/pairing?branch=paring_with_c_wi#b790d9c88e3049e88d2f0d136feaf35d41e2d47b"
 dependencies = [
  "bls12_381",
  "ec-gpu",

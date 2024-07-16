@@ -2,7 +2,9 @@ use crate::assign::{AssignedCondition, AssignedG2Affine};
 use crate::circuit::base_chip::BaseChipOps;
 use crate::circuit::ecc_chip::EccChipBaseOps;
 use crate::circuit::fq12::{Fq12ChipOps, Fq2ChipOps};
-use crate::circuit::pairing_chip::PairingChipOps;
+use crate::circuit::integer_chip::IntegerChipOps;
+use crate::circuit::pairing_chip::{PairingChipOnProvePairingOps, PairingChipOps};
+use crate::circuit::range_chip::RangeChipOps;
 use crate::context::IntegerContext;
 use crate::context::{Context, NativeScalarEccContext};
 use crate::tests::run_circuit_on_bn256;
@@ -14,129 +16,31 @@ use halo2_proofs::pairing::group::cofactor::CofactorCurveAffine;
 use rand::rngs::OsRng;
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::circuit::integer_chip::IntegerChipOps;
-use crate::circuit::range_chip::RangeChipOps;
 
 use super::bench_circuit_on_bn256;
 
-fn build_bn256_pairing_chip_over_bn256_fr_circuit_wi() -> NativeScalarEccContext<G1Affine> {
-    // {
-    //     let ctx = Rc::new(RefCell::new(Context::new()));
-    //     let ctx = IntegerContext::<halo2_proofs::pairing::bn256::Fq, Fr>::new(ctx);
-    //     let mut ctx = NativeScalarEccContext::<G1Affine>(ctx, 0);
-    //
-    //     // ctx.0.assign_w()
-    //     let a = G1Affine::random(&mut OsRng);
-    //     let b = G2Affine::from(G2::random(&mut OsRng));
-    //
-    //     let ab = pairing(&a, &b);
-    //
-    //     let bx = ctx.fq2_assign_constant((
-    //         b.coordinates().unwrap().x().c0,
-    //         b.coordinates().unwrap().x().c1,
-    //     ));
-    //     let by = ctx.fq2_assign_constant((
-    //         b.coordinates().unwrap().y().c0,
-    //         b.coordinates().unwrap().y().c1,
-    //     ));
-    //     let b = AssignedG2Affine::new(
-    //         bx,
-    //         by,
-    //         AssignedCondition(ctx.0.ctx.borrow_mut().assign_constant(Fr::zero())),
-    //     );
-    //
-    //     let ab0 = ctx.fq12_assign_constant((
-    //         (
-    //             (ab.0.c0.c0.c0, ab.0.c0.c0.c1),
-    //             (ab.0.c0.c1.c0, ab.0.c0.c1.c1),
-    //             (ab.0.c0.c2.c0, ab.0.c0.c2.c1),
-    //         ),
-    //         (
-    //             (ab.0.c1.c0.c0, ab.0.c1.c0.c1),
-    //             (ab.0.c1.c1.c0, ab.0.c1.c1.c1),
-    //             (ab.0.c1.c2.c0, ab.0.c1.c2.c1),
-    //         ),
-    //     ));
-    //
-    //     let a = ctx.assign_point(&a.to_curve());
-    //
-    //     let ab1 = ctx.pairing(&[(&a, &b)]);
-    //
-    //     ctx.fq12_assert_eq(&ab0, &ab1);
-    //
-    //     run_circuit_on_bn256(ctx.into(), 22);
-    // }
-
-    {
-        let ctx = Rc::new(RefCell::new(Context::new()));
-        let ctx = IntegerContext::<halo2_proofs::pairing::bn256::Fq, Fr>::new(ctx);
-        let mut ctx = NativeScalarEccContext::<G1Affine>(ctx, 0);
-
-        let a = G1Affine::random(&mut OsRng);
-        let b = G2Affine::from(G2::random(&mut OsRng));
-
-        let bx = ctx.fq2_assign_constant((
-            b.coordinates().unwrap().x().c0,
-            b.coordinates().unwrap().x().c1,
-        ));
-        let by = ctx.fq2_assign_constant((
-            b.coordinates().unwrap().y().c0,
-            b.coordinates().unwrap().y().c1,
-        ));
-        let b = AssignedG2Affine::new(
-            bx,
-            by,
-            AssignedCondition(ctx.0.ctx.borrow_mut().assign_constant(Fr::zero())),
-        );
-
-        let neg_a = ctx.assign_point(&-a.to_curve());
-        let a = ctx.assign_point(&a.to_curve());
-
-        let timer = start_timer!(|| "setup");
-        ctx.check_pairing(&[(&a, &b), (&neg_a, &b)]);
-        end_timer!(timer);
-
-        ctx
-    }
-}
-
-// #[test]
-// fn test_bn256_pairing_chip_over_bn256_fr_wi() {
-//     let ctx = build_bn256_pairing_chip_over_bn256_fr_circuit();
-//     run_circuit_on_bn256(ctx.into(), 22);
-// }
-//
-// #[test]
-// fn bench_bn256_pairing_chip_over_bn256_fr() {
-//     let ctx = build_bn256_pairing_chip_over_bn256_fr_circuit();
-//     bench_circuit_on_bn256(ctx.into(), 22);
-// }
-
-
-use num_bigint::BigUint;
-use num_traits::{ToPrimitive};
-use num_traits::{Num};
+use halo2_proofs::pairing::bn256;
 use halo2_proofs::pairing::bn256::Fq;
 use halo2_proofs::pairing::bn256::Fq12;
-use halo2_proofs::pairing::bn256;
+use num_bigint::BigUint;
+use num_traits::Num;
+use num_traits::ToPrimitive;
 // use ark_ff::{One};
-use halo2_proofs::arithmetic::{BaseExt,Field,MillerLoopResult};
-use halo2_proofs::pairing::group::{Group,Curve};
-// use halo2_proofs::pairing::bn256::G2Affine;
-use std::str::FromStr;
 use ark_std::One;
+use halo2_proofs::arithmetic::{BaseExt, Field, MillerLoopResult};
+use halo2_proofs::pairing::group::{Curve, Group};
+use std::str::FromStr;
 
-
-
+use crate::utils::field_to_bn;
 use std::ops::Mul;
 use std::ops::Neg;
-use crate::utils::field_to_bn;
 
 #[test]
 fn test_checkpairing_with_c_wi() {
     // exp = 6x + 2 + p - p^2 = lambda - p^3
     let fq_module = Fq::MODULUS;
-    let hex_str = fq_module.strip_prefix("0x")
+    let hex_str = fq_module
+        .strip_prefix("0x")
         .or_else(|| fq_module.strip_prefix("0X"))
         .unwrap_or(fq_module);
     let p_pow3 = &BigUint::from_str_radix(hex_str, 16).unwrap().pow(3_u32);
@@ -156,9 +60,7 @@ fn test_checkpairing_with_c_wi() {
     // namely e(-P1, Q1) * e(P2, Q2) = 1
     let P1 = bn256::G1::random(&mut OsRng);
     let Q2 = bn256::G2::random(&mut OsRng);
-    // println!("P1: {:?}", P1);
-    // println!("Q2:{:?}",Q2);
-    let factor = bn256::Fr::from_raw([3_u64,0,0,0]);
+    let factor = bn256::Fr::from_raw([3_u64, 0, 0, 0]);
     let P2 = P1.mul(&factor).to_affine();
     let Q1 = Q2.mul(&factor).to_affine();
     let Q1_prepared = bn256::G2Prepared::from(Q1);
@@ -168,11 +70,13 @@ fn test_checkpairing_with_c_wi() {
     // equivalently (f * c_inv)^{lambda - p^3} * wi = c_inv^{-p^3} = c^{p^3}
     assert_eq!(
         Fq12::one(),
-        bn256::multi_miller_loop(&[(&P1.neg().to_affine(), &Q1_prepared),(&P2, &Q2_prepared)]).final_exponentiation().0,
+        bn256::multi_miller_loop(&[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)])
+            .final_exponentiation()
+            .0,
     );
 
-    let f = bn256::multi_miller_loop(&[(&P1.neg().to_affine(), &Q1_prepared),(&P2, &Q2_prepared)]).0;
-    println!("Bn254::multi_miller_loop done!");
+    let f =
+        bn256::multi_miller_loop(&[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)]).0;
     let (c, wi) = compute_c_wi(f);
     let c_inv = c.invert().unwrap();
     let hint = if sign {
@@ -185,10 +89,14 @@ fn test_checkpairing_with_c_wi() {
 
     assert_eq!(
         Fq12::one(),
-        // c.pow_vartime(p_pow3.to_u64_digits()),
-        bn256::multi_miller_loop_c_wi(&bn256::Gt(c),&bn256::Gt(wi),&[(&P1.neg().to_affine(), &Q1_prepared),(&P2, &Q2_prepared)]).0,
+        bn256::multi_miller_loop_c_wi(
+            &bn256::Gt(c),
+            &bn256::Gt(wi),
+            &[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)]
+        )
+        .0,
     );
-    println!("Accumulated f_wi done!");
+    println!("multi_miller_loop_c_wi verify done!");
 
     let ctx = Rc::new(RefCell::new(Context::new()));
     let ctx = IntegerContext::<halo2_proofs::pairing::bn256::Fq, Fr>::new(ctx);
@@ -230,30 +138,40 @@ fn test_checkpairing_with_c_wi() {
     );
 
     let timer = start_timer!(|| "setup");
-    ctx.check_pairing_c_wi(&c_assign,&wi_assign,&[(&P1_Assign, &Q1_assign), (&P2_assign, &Q2_assign)]);
+    ctx.check_pairing_c_wi(
+        &c_assign,
+        &wi_assign,
+        &[(&P1_Assign, &Q1_assign), (&P2_assign, &Q2_assign)],
+    );
     end_timer!(timer);
-    println!("check done,base_offset ={},range={}", ctx.0.ctx.borrow().base_offset,ctx.0.ctx.borrow().range_offset);
+    println!(
+        "check done,base_offset ={},range={}",
+        ctx.0.ctx.borrow().base_offset,
+        ctx.0.ctx.borrow().range_offset
+    );
 }
 
-fn decode_fq12(a:&Fq12)->(((Fq,Fq),(Fq,Fq),(Fq,Fq)),((Fq,Fq),(Fq,Fq),(Fq,Fq))){
-    return (((a.c0.c0.c0,a.c0.c0.c1),
-             (a.c0.c1.c0,a.c0.c1.c1),
-             (a.c0.c2.c0,a.c0.c2.c1)),
-            ((a.c1.c0.c0,a.c1.c0.c1),
-             (a.c1.c1.c0,a.c1.c1.c1),
-             (a.c1.c2.c0,a.c1.c2.c1)))
-
+fn decode_fq12(
+    a: &Fq12,
+) -> (
+    ((Fq, Fq), (Fq, Fq), (Fq, Fq)),
+    ((Fq, Fq), (Fq, Fq), (Fq, Fq)),
+) {
+    return (
+        (
+            (a.c0.c0.c0, a.c0.c0.c1),
+            (a.c0.c1.c0, a.c0.c1.c1),
+            (a.c0.c2.c0, a.c0.c2.c1),
+        ),
+        (
+            (a.c1.c0.c0, a.c1.c0.c1),
+            (a.c1.c1.c0, a.c1.c1.c1),
+            (a.c1.c2.c0, a.c1.c2.c1),
+        ),
+    );
 }
 
-
-
-fn tonelli_shanks_cubic(
-    a: Fq12,
-    c: Fq12,
-    s: u32,
-    t: BigUint,
-    k: BigUint,
-) -> Fq12 {
+fn tonelli_shanks_cubic(a: Fq12, c: Fq12, s: u32, t: BigUint, k: BigUint) -> Fq12 {
     // let mut r = a.pow(t.to_u64_digits());
     let mut r = a.pow_vartime(t.to_u64_digits());
     let e = 3_u32.pow(s - 1);
@@ -276,7 +194,10 @@ fn tonelli_shanks_cubic(
         if d == cc {
             (h, r) = (h * c, r * c.pow_vartime([3_u64]));
         } else if d == cc.pow_vartime([2_u64]) {
-            (h, r) = (h * c.pow_vartime([2_u64]), r * c.pow_vartime([3_u64]).pow_vartime([2_u64]));
+            (h, r) = (
+                h * c.pow_vartime([2_u64]),
+                r * c.pow_vartime([3_u64]).pow_vartime([2_u64]),
+            );
         }
         c = c.pow_vartime([3_u64])
     }
@@ -294,12 +215,15 @@ fn tonelli_shanks_cubic(
 // refer from Algorithm 5 of "On Proving Pairings"(https://eprint.iacr.org/2024/640.pdf)
 fn compute_c_wi(f: Fq12) -> (Fq12, Fq12) {
     // let p = BigUint::from_str_radix(Fq::MODULUS, 16).unwrap();
-    let p = BigUint::from_str("21888242871839275222246405745257275088696311157297823662689037894645226208583").unwrap();
+    let p = BigUint::from_str(
+        "21888242871839275222246405745257275088696311157297823662689037894645226208583",
+    )
+    .unwrap();
 
     let r = BigUint::from_str(
         "21888242871839275222246405745257275088548364400416034343698204186575808495617",
     )
-        .unwrap();
+    .unwrap();
     let lambda = BigUint::from_str(
         "10486551571378427818905133077457505975146652579011797175399169355881771981095211883813744499745558409789005132135496770941292989421431235276221147148858384772096778432243207188878598198850276842458913349817007302752534892127325269"
     ).unwrap();
@@ -339,10 +263,10 @@ fn compute_c_wi(f: Fq12) -> (Fq12, Fq12) {
     assert_ne!(w.pow_vartime(cofactor_cubic.to_u64_digits()), Fq12::one());
     assert_eq!(w.pow_vartime(h.to_u64_digits()), Fq12::one());
 
-    let wi = if f.pow_vartime(cofactor_cubic.to_u64_digits()) == Fq12::one(){
+    let wi = if f.pow_vartime(cofactor_cubic.to_u64_digits()) == Fq12::one() {
         println!("f is fq12_one------------");
         Fq12::one()
-    }else{
+    } else {
         // just two option, w and w^2, since w^3 must be cubic residue, leading f*w^3 must not be cubic residue
         let mut wi = w;
         if (f * wi).pow_vartime(cofactor_cubic.to_u64_digits()) != Fq12::one() {
@@ -354,7 +278,6 @@ fn compute_c_wi(f: Fq12) -> (Fq12, Fq12) {
         }
         wi
     };
-
 
     assert_eq!(wi.pow_vartime(h.to_u64_digits()), Fq12::one());
 

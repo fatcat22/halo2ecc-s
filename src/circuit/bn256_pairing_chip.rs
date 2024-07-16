@@ -23,7 +23,7 @@ use super::{
     fq12::{
         Fq12BnSpecificOps, Fq12ChipOps, Fq2BnSpecificOps, Fq2ChipOps, Fq6BnSpecificOps, Fq6ChipOps,
     },
-    pairing_chip::PairingChipOps,
+    pairing_chip::{PairingChipOnProvePairingOps, PairingChipOps},
 };
 
 impl<N: FieldExt, T: EccBaseIntegerChipWrapper<Fq, N> + Fq2ChipOps<Fq, N>> Fq2BnSpecificOps<Fq, N>
@@ -229,7 +229,8 @@ impl NativeScalarEccContext<G1Affine> {
 
     fn multi_miller_loop_c_wi(
         &mut self,
-        c:&AssignedFq12<Fq,Fr>, wi:&AssignedFq12<Fq,Fr>,
+        c: &AssignedFq12<Fq, Fr>,
+        wi: &AssignedFq12<Fq, Fr>,
         terms: &[(
             &AssignedG1Affine<G1Affine, Fr>,
             &AssignedG2Prepared<G1Affine, Fr>,
@@ -243,9 +244,8 @@ impl NativeScalarEccContext<G1Affine> {
         }
 
         let c_inv = self.fq12_unsafe_invert(c);
-        //todo clone is ok?
         //f=c_inv
-        let mut f = self.fq12_unsafe_invert(c);
+        let mut f = c_inv.clone();
 
         for i in (1..SIX_U_PLUS_2_NAF.len()).rev() {
             f = self.fq12_square(&f);
@@ -255,13 +255,9 @@ impl NativeScalarEccContext<G1Affine> {
             // f = f * c_inv, if digit == 1
             // f = f * c, if digit == -1
             match x {
-                1 => {
-                    f = self.fq12_mul(&f,&c_inv)
-                }
-                -1 => {
-                    f = self.fq12_mul(&f, &c)
-                }
-                _ => {},
+                1 => f = self.fq12_mul(&f, &c_inv),
+                -1 => f = self.fq12_mul(&f, &c),
+                _ => {}
             }
 
             for &mut (p, ref mut coeffs) in &mut pairs {
@@ -424,19 +420,24 @@ impl PairingChipOps<G1Affine, Fr> for NativeScalarEccContext<G1Affine> {
         self.multi_miller_loop(terms)
     }
 
-    fn multi_miller_loop_c_wi(
-        &mut self,
-        c:&AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
-        wi:&AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
-        terms: &[(&AssignedG1Affine<G1Affine, Fr>, &AssignedG2Prepared<G1Affine, Fr>)],
-    ) -> AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>{
-        self.multi_miller_loop_c_wi(c,wi,terms)
-    }
-
     fn final_exponentiation(
         &mut self,
         f: &AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
     ) -> AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr> {
         self.final_exponentiation(f)
+    }
+}
+
+impl PairingChipOnProvePairingOps<G1Affine, Fr> for NativeScalarEccContext<G1Affine> {
+    fn multi_miller_loop_c_wi(
+        &mut self,
+        c: &AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
+        wi: &AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
+        terms: &[(
+            &AssignedG1Affine<G1Affine, Fr>,
+            &AssignedG2Prepared<G1Affine, Fr>,
+        )],
+    ) -> AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr> {
+        self.multi_miller_loop_c_wi(c, wi, terms)
     }
 }

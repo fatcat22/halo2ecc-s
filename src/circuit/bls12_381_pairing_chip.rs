@@ -232,14 +232,6 @@ impl PairingChipOps<G1Affine, Fr> for GeneralScalarEccContext<G1Affine, Fr> {
 
         f
     }
-    fn multi_miller_loop_c_wi(
-        &mut self,
-        _:&AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
-        _:&AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>,
-        _: &[(&AssignedG1Affine<G1Affine, Fr>, &AssignedG2Prepared<G1Affine, Fr>)],
-    ) -> AssignedFq12<<G1Affine as halo2_proofs::arithmetic::CurveAffine>::Base, Fr>{
-        unimplemented!()
-    }
 
     fn final_exponentiation(
         &mut self,
