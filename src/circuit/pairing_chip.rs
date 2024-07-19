@@ -2,7 +2,7 @@
   The implementation is ported from https://github.com/privacy-scaling-explorations/pairing
 */
 use crate::assign::{AssignedFq12, AssignedFq2, AssignedG1Affine};
-use crate::assign::{AssignedG2, AssignedG2Affine, AssignedG2Prepared};
+use crate::assign::{AssignedG2, AssignedG2Affine, AssignedG2OnProvePrepared, AssignedG2Prepared};
 use halo2_proofs::arithmetic::{CurveAffine, FieldExt};
 
 use super::fq12::{Fq12BnSpecificOps, Fq12ChipOps};
@@ -208,6 +208,23 @@ pub trait PairingChipOnProvePairingOps<C: CurveAffine, N: FieldExt>: PairingChip
         terms: &[(&AssignedG1Affine<C, N>, &AssignedG2Affine<C, N>)],
     ) {
         let res = self.pairing_c_wi(c, wi, terms);
+        self.fq12_assert_one(&res);
+    }
+
+    fn multi_miller_loop_on_prove_pairing(
+        &mut self,
+        c: &AssignedFq12<C::Base, N>,
+        wi: &AssignedFq12<C::Base, N>,
+        terms: &[(&AssignedG1Affine<C, N>, &AssignedG2OnProvePrepared<C, N>)],
+    ) -> AssignedFq12<C::Base, N>;
+
+    fn check_pairing_on_prove_pairing(
+        &mut self,
+        c: &AssignedFq12<C::Base, N>,
+        wi: &AssignedFq12<C::Base, N>,
+        terms: &[(&AssignedG1Affine<C, N>, &AssignedG2OnProvePrepared<C, N>)],
+    ) {
+        let res = self.multi_miller_loop_on_prove_pairing(c, wi, terms);
         self.fq12_assert_one(&res);
     }
 }
