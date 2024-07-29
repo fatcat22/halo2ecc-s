@@ -2,22 +2,16 @@ use crate::assign::{AssignedCondition, AssignedFq2, AssignedG2Affine, AssignedG2
 use crate::circuit::base_chip::BaseChipOps;
 use crate::circuit::ecc_chip::EccChipBaseOps;
 use crate::circuit::fq12::{Fq12ChipOps, Fq2ChipOps};
-use crate::circuit::integer_chip::IntegerChipOps;
-use crate::circuit::pairing_chip::{PairingChipOnProvePairingOps, PairingChipOps};
-use crate::circuit::range_chip::RangeChipOps;
+use crate::circuit::pairing_chip::PairingChipOnProvePairingOps;
 use crate::context::IntegerContext;
 use crate::context::{Context, NativeScalarEccContext};
-use crate::tests::run_circuit_on_bn256;
 use ark_std::{end_timer, start_timer};
 use halo2_proofs::arithmetic::CurveAffine;
-use halo2_proofs::pairing::bn256::pairing;
-use halo2_proofs::pairing::bn256::{Fr, G1Affine, G2Affine, G2};
+use halo2_proofs::pairing::bn256::{Fr, G1Affine};
 use halo2_proofs::pairing::group::cofactor::CofactorCurveAffine;
 use rand::rngs::OsRng;
 use std::cell::RefCell;
 use std::rc::Rc;
-
-use super::bench_circuit_on_bn256;
 
 use halo2_proofs::pairing::bn256;
 use halo2_proofs::pairing::bn256::Fq;
@@ -31,7 +25,6 @@ use halo2_proofs::arithmetic::{BaseExt, Field, MillerLoopResult};
 use halo2_proofs::pairing::group::{Curve, Group};
 use std::str::FromStr;
 
-use crate::utils::field_to_bn;
 use std::ops::Mul;
 use std::ops::Neg;
 
@@ -58,25 +51,25 @@ fn test_checkpairing_with_c_wi() {
 
     // prove e(P1, Q1) = e(P2, Q2)
     // namely e(-P1, Q1) * e(P2, Q2) = 1
-    let P1 = bn256::G1::random(&mut OsRng);
-    let Q2 = bn256::G2::random(&mut OsRng);
+    let p1 = bn256::G1::random(&mut OsRng);
+    let q2 = bn256::G2::random(&mut OsRng);
     let factor = bn256::Fr::from_raw([3_u64, 0, 0, 0]);
-    let P2 = P1.mul(&factor).to_affine();
-    let Q1 = Q2.mul(&factor).to_affine();
-    let Q1_prepared = bn256::G2Prepared::from(Q1);
-    let Q2_prepared = bn256::G2Prepared::from(Q2.to_affine());
+    let p2 = p1.mul(&factor).to_affine();
+    let q1 = q2.mul(&factor).to_affine();
+    let q1_prepared = bn256::G2Prepared::from(q1);
+    let q2_prepared = bn256::G2Prepared::from(q2.to_affine());
 
     // f^{lambda - p^3} * wi = c^lambda
     // equivalently (f * c_inv)^{lambda - p^3} * wi = c_inv^{-p^3} = c^{p^3}
     assert_eq!(
         Fq12::one(),
-        bn256::multi_miller_loop(&[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)])
+        bn256::multi_miller_loop(&[(&p1.neg().to_affine(), &q1_prepared), (&p2, &q2_prepared)])
             .final_exponentiation()
             .0,
     );
 
     let f =
-        bn256::multi_miller_loop(&[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)]).0;
+        bn256::multi_miller_loop(&[(&p1.neg().to_affine(), &q1_prepared), (&p2, &q2_prepared)]).0;
     let (c, wi) = compute_c_wi(f);
     let c_inv = c.invert().unwrap();
     let hint = if sign {
@@ -92,7 +85,7 @@ fn test_checkpairing_with_c_wi() {
         bn256::multi_miller_loop_c_wi(
             &bn256::Gt(c),
             &bn256::Gt(wi),
-            &[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)]
+            &[(&p1.neg().to_affine(), &q1_prepared), (&p2, &q2_prepared)]
         )
         .0,
     );
@@ -105,35 +98,35 @@ fn test_checkpairing_with_c_wi() {
     let c_assign = ctx.fq12_assign_value(decode_fq12(&c));
     let wi_assign = ctx.fq12_assign_value(decode_fq12(&wi));
 
-    let P1_Assign = ctx.assign_point(&-P1);
-    let P2_assign = ctx.assign_point(&P2.to_curve());
+    let p1_assign = ctx.assign_point(&-p1);
+    let p2_assign = ctx.assign_point(&p2.to_curve());
 
-    let Q1x = ctx.fq2_assign_constant((
-        Q1.coordinates().unwrap().x().c0,
-        Q1.coordinates().unwrap().x().c1,
+    let q1x = ctx.fq2_assign_constant((
+        q1.coordinates().unwrap().x().c0,
+        q1.coordinates().unwrap().x().c1,
     ));
-    let Q1y = ctx.fq2_assign_constant((
-        Q1.coordinates().unwrap().y().c0,
-        Q1.coordinates().unwrap().y().c1,
+    let q1y = ctx.fq2_assign_constant((
+        q1.coordinates().unwrap().y().c0,
+        q1.coordinates().unwrap().y().c1,
     ));
-    let Q1_assign = AssignedG2Affine::new(
-        Q1x,
-        Q1y,
+    let q1_assign = AssignedG2Affine::new(
+        q1x,
+        q1y,
         AssignedCondition(ctx.0.ctx.borrow_mut().assign_constant(Fr::zero())),
     );
 
-    let Q2_Affine = Q2.to_affine();
-    let Q2x = ctx.fq2_assign_constant((
-        Q2_Affine.coordinates().unwrap().x().c0,
-        Q2_Affine.coordinates().unwrap().x().c1,
+    let q2_affine = q2.to_affine();
+    let q2x = ctx.fq2_assign_constant((
+        q2_affine.coordinates().unwrap().x().c0,
+        q2_affine.coordinates().unwrap().x().c1,
     ));
-    let Q2y = ctx.fq2_assign_constant((
-        Q2_Affine.coordinates().unwrap().y().c0,
-        Q2_Affine.coordinates().unwrap().y().c1,
+    let q2y = ctx.fq2_assign_constant((
+        q2_affine.coordinates().unwrap().y().c0,
+        q2_affine.coordinates().unwrap().y().c1,
     ));
-    let Q2_assign = AssignedG2Affine::new(
-        Q2x,
-        Q2y,
+    let q2_assign = AssignedG2Affine::new(
+        q2x,
+        q2y,
         AssignedCondition(ctx.0.ctx.borrow_mut().assign_constant(Fr::zero())),
     );
 
@@ -141,7 +134,7 @@ fn test_checkpairing_with_c_wi() {
     ctx.check_pairing_c_wi(
         &c_assign,
         &wi_assign,
-        &[(&P1_Assign, &Q1_assign), (&P2_assign, &Q2_assign)],
+        &[(&p1_assign, &q1_assign), (&p2_assign, &q2_assign)],
     );
     end_timer!(timer);
     println!(
@@ -174,30 +167,22 @@ fn test_on_prove_pairing() {
 
     // prove e(P1, Q1) = e(P2, Q2)
     // namely e(-P1, Q1) * e(P2, Q2) = 1
-    let P1 = bn256::G1::random(&mut OsRng);
-    let Q2 = bn256::G2::random(&mut OsRng);
+    let p1 = bn256::G1::random(&mut OsRng);
+    let q2 = bn256::G2::random(&mut OsRng);
     let factor = bn256::Fr::from_raw([3_u64, 0, 0, 0]);
-    let P2 = P1.mul(&factor).to_affine();
-    let Q1 = Q2.mul(&factor).to_affine();
-    let Q1_prepared = bn256::G2Prepared::from(Q1);
-    let Q2_prepared = bn256::G2Prepared::from(Q2.to_affine());
-    let Q1OnProvePrepared = bn256::G2OnProvePrepared::from(Q1);
-    let Q2OnProvePrepared = bn256::G2OnProvePrepared::from(Q2.to_affine());
-
-    // f^{lambda - p^3} * wi = c^lambda
-    // equivalently (f * c_inv)^{lambda - p^3} * wi = c_inv^{-p^3} = c^{p^3}
-    assert_eq!(
-        Fq12::one(),
-        bn256::multi_miller_loop(&[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)])
-            .final_exponentiation()
-            .0,
-    );
+    let p2 = p1.mul(&factor).to_affine();
+    let q1 = q2.mul(&factor).to_affine();
+    let q1_on_prove_prepared = bn256::G2OnProvePrepared::from(q1);
+    let q2_on_prove_prepared = bn256::G2OnProvePrepared::from(q2.to_affine());
 
     let f = bn256::multi_miller_loop_on_prove_pairing_prepare(&[
-        (&P1.neg().to_affine(), &Q1OnProvePrepared),
-        (&P2, &Q2OnProvePrepared),
-    ])
-    .0;
+        (&p1.neg().to_affine(), &q1_on_prove_prepared),
+        (&p2, &q2_on_prove_prepared),
+    ]);
+
+    assert_eq!(Fq12::one(), f.final_exponentiation().0);
+    let f = f.0;
+
     let (c, wi) = compute_c_wi(f);
     let c_inv = c.invert().unwrap();
     let hint = if sign {
@@ -205,19 +190,7 @@ fn test_on_prove_pairing() {
     } else {
         f * wi * (c_inv.pow_vartime(exp.to_u64_digits()).invert().unwrap())
     };
-
     assert_eq!(hint, c.pow_vartime(p_pow3.to_u64_digits()));
-
-    // assert_eq!(
-    //     Fq12::one(),
-    //     bn256::multi_miller_loop_c_wi(
-    //         &bn256::Gt(c),
-    //         &bn256::Gt(wi),
-    //         &[(&P1.neg().to_affine(), &Q1_prepared), (&P2, &Q2_prepared)]
-    //     )
-    //         .0,
-    // );
-    // println!("multi_miller_loop_c_wi verify done!");
 
     let ctx = Rc::new(RefCell::new(Context::new()));
     let ctx = IntegerContext::<halo2_proofs::pairing::bn256::Fq, Fr>::new(ctx);
@@ -227,61 +200,58 @@ fn test_on_prove_pairing() {
     let wi_assign = ctx.fq12_assign_value(decode_fq12(&wi));
 
     let mut coeffs_q1: Vec<[AssignedFq2<Fq, Fr>; 2]> = vec![];
-    let one = ctx.fq2_assign_one();
-    for v in Q1OnProvePrepared.coeffs.iter() {
+    for v in bn256::get_g2_on_prove_prepared_coeffs(&q1_on_prove_prepared).iter() {
         coeffs_q1.push([
-            ctx.fq2_assign_value((v.0.c0, v.0.c1)),
-            ctx.fq2_assign_value((v.1.c0, v.1.c1)),
+            ctx.fq2_assign_constant((v.0 .0, v.0 .1)),
+            ctx.fq2_assign_constant((v.1 .0, v.1 .1)),
         ]);
-        // coeffs_q1.push([ctx.fq2_neg(&one),ctx.fq2_assign_value((v.0.c0,v.0.c1)),ctx.fq2_assign_value((v.1.c0,v.1.c1))]);
     }
     let mut coeffs_q2: Vec<[AssignedFq2<Fq, Fr>; 2]> = vec![];
-    for v in Q2OnProvePrepared.coeffs.iter() {
+    for v in bn256::get_g2_on_prove_prepared_coeffs(&q2_on_prove_prepared).iter() {
         coeffs_q2.push([
-            ctx.fq2_assign_value((v.0.c0, v.0.c1)),
-            ctx.fq2_assign_value((v.1.c0, v.1.c1)),
+            ctx.fq2_assign_constant((v.0 .0, v.0 .1)),
+            ctx.fq2_assign_constant((v.1 .0, v.1 .1)),
         ]);
-        // coeffs_q2.push([ctx.fq2_neg(&one),ctx.fq2_assign_value((v.0.c0,v.0.c1)),ctx.fq2_assign_value((v.1.c0,v.1.c1))]);
     }
 
-    let P1_Assign = ctx.assign_point(&-P1);
-    let P2_assign = ctx.assign_point(&P2.to_curve());
+    let p1_assign = ctx.assign_point(&-p1);
+    let p2_assign = ctx.assign_point(&p2.to_curve());
 
-    let Q1x = ctx.fq2_assign_constant((
-        Q1.coordinates().unwrap().x().c0,
-        Q1.coordinates().unwrap().x().c1,
+    let q1x = ctx.fq2_assign_constant((
+        q1.coordinates().unwrap().x().c0,
+        q1.coordinates().unwrap().x().c1,
     ));
-    let Q1y = ctx.fq2_assign_constant((
-        Q1.coordinates().unwrap().y().c0,
-        Q1.coordinates().unwrap().y().c1,
+    let q1y = ctx.fq2_assign_constant((
+        q1.coordinates().unwrap().y().c0,
+        q1.coordinates().unwrap().y().c1,
     ));
-    let Q1_assign = AssignedG2Affine::new(
-        Q1x,
-        Q1y,
+    let q1_assign = AssignedG2Affine::new(
+        q1x,
+        q1y,
         AssignedCondition(ctx.0.ctx.borrow_mut().assign_constant(Fr::zero())),
     );
 
-    let Q2_Affine = Q2.to_affine();
-    let Q2x = ctx.fq2_assign_constant((
-        Q2_Affine.coordinates().unwrap().x().c0,
-        Q2_Affine.coordinates().unwrap().x().c1,
+    let q2_affine = q2.to_affine();
+    let q2x = ctx.fq2_assign_constant((
+        q2_affine.coordinates().unwrap().x().c0,
+        q2_affine.coordinates().unwrap().x().c1,
     ));
-    let Q2y = ctx.fq2_assign_constant((
-        Q2_Affine.coordinates().unwrap().y().c0,
-        Q2_Affine.coordinates().unwrap().y().c1,
+    let q2y = ctx.fq2_assign_constant((
+        q2_affine.coordinates().unwrap().y().c0,
+        q2_affine.coordinates().unwrap().y().c1,
     ));
-    let Q2_assign = AssignedG2Affine::new(
-        Q2x,
-        Q2y,
+    let q2_assign = AssignedG2Affine::new(
+        q2x,
+        q2y,
         AssignedCondition(ctx.0.ctx.borrow_mut().assign_constant(Fr::zero())),
     );
-    let q1_prepared = AssignedG2OnProvePrepared::new(coeffs_q1, Q1_assign);
-    let q2_prepared = AssignedG2OnProvePrepared::new(coeffs_q2, Q2_assign);
+    let q1_prepared = AssignedG2OnProvePrepared::new(coeffs_q1, q1_assign);
+    let q2_prepared = AssignedG2OnProvePrepared::new(coeffs_q2, q2_assign);
     let timer = start_timer!(|| "setup");
     ctx.check_pairing_on_prove_pairing(
         &c_assign,
         &wi_assign,
-        &[(&P1_Assign, &q1_prepared), (&P2_assign, &q2_prepared)],
+        &[(&p1_assign, &q1_prepared), (&p2_assign, &q2_prepared)],
     );
     end_timer!(timer);
     println!(
