@@ -479,8 +479,6 @@ impl NativeScalarEccContext<G1Affine> {
         let alpha_square_x1 = self.fq2_sub(&alpha_square, &r.x);
         let x3 = self.fq2_sub(&alpha_square_x1, &p.x);
 
-        // let x3 = self.fq2_sub(&self.fq2_sub(&self.fq2_square(&alpha), &r.x),&p.x);
-
         //y3 = -alpha*x3 - bias
         let alpha_x3 = self.fq2_mul(alpha, &x3);
         let alpha_x3_bias = self.fq2_add(&alpha_x3, bias);

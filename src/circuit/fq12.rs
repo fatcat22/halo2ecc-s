@@ -294,9 +294,9 @@ pub trait Fq6ChipOps<W: BaseExt, N: FieldExt>: Fq2ChipOps<W, N> + Fq2BnSpecificO
 
     fn fq6_assign_value(&mut self, c: ((W, W), (W, W), (W, W))) -> AssignedFq6<W, N> {
         (
-            self.fq2_assign_constant(c.0),
-            self.fq2_assign_constant(c.1),
-            self.fq2_assign_constant(c.2),
+            self.fq2_assign_value(c.0),
+            self.fq2_assign_value(c.1),
+            self.fq2_assign_value(c.2),
         )
     }
 }
@@ -476,6 +476,6 @@ pub trait Fq12ChipOps<W: BaseExt, N: FieldExt>: Fq6ChipOps<W, N> + Fq6BnSpecific
         &mut self,
         c: (((W, W), (W, W), (W, W)), ((W, W), (W, W), (W, W))),
     ) -> AssignedFq12<W, N> {
-        (self.fq6_assign_constant(c.0), self.fq6_assign_constant(c.1))
+        (self.fq6_assign_value(c.0), self.fq6_assign_value(c.1))
     }
 }
