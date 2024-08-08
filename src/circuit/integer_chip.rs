@@ -657,6 +657,8 @@ impl<W: BaseExt, N: FieldExt> IntegerChipOps<W, N> for IntegerContext<W, N> {
         res
     }
 
+    /// cond == 1 return a
+    /// cond == 0 return b
     fn bisec_int(
         &mut self,
         cond: &AssignedCondition<N>,

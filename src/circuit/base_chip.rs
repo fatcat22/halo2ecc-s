@@ -216,6 +216,7 @@ pub trait BaseChipOps<N: FieldExt> {
         cells.1
     }
 
+    /// a * b * ab_coeff + c*c_coeff
     fn mul_add(
         &mut self,
         a: &AssignedValue<N>,
@@ -571,6 +572,8 @@ impl<N: FieldExt> BaseChipOps<N> for Context<N> {
         (res0, res1)
     }
 
+    /// cond == 1 return a
+    /// cond == 0 return b
     fn bisec(
         &mut self,
         cond: &AssignedCondition<N>,
@@ -598,6 +601,7 @@ impl<N: FieldExt> BaseChipOps<N> for Context<N> {
             cells.1
         } else {
             assert!(self.var_columns() >= 4);
+            // cond * a + b - cond * b
             let t = self.mul_add(&cond.0, a, N::one(), b, one);
             self.mul_add(&cond.0, b, -one, &t, one)
         }
