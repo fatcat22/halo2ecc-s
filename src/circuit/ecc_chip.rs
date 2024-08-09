@@ -872,11 +872,13 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
         &mut self,
         a: &AssignedNonZeroPoint<C, N>,
     ) -> Result<AssignedNonZeroPoint<C, N>, UnsafeError> {
-        // 3 * x ^ 2 / 2 * y
+        // 3 * x ^ 2 + A / 2 * y
         let x_square = self.base_integer_chip().int_square(&a.x);
         let numerator = self
             .base_integer_chip()
             .int_mul_small_constant(&x_square, 3);
+        let param_a = self.base_integer_chip().assign_int_constant(C::a());
+        let numerator = self.base_integer_chip().int_add(&numerator, &param_a);
         let denominator = self.base_integer_chip().int_mul_small_constant(&a.y, 2);
 
         let (z, v) = self.base_integer_chip().int_div(&numerator, &denominator);
