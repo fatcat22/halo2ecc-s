@@ -469,13 +469,16 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
         let y = self.base_integer_chip().assign_w(&field_to_bn(&y));
         let z = self.base_integer_chip().base_chip().assign_bit(z);
 
-        // Constrain y^2 = x^3 + b
+        // Constrain y^2 = x^3 ax + b
         // TODO: Optimize b
+        let a = self.base_integer_chip().assign_int_constant(C::a());
         let b = self.base_integer_chip().assign_int_constant(C::b());
         let y2 = self.base_integer_chip().int_square(&y);
         let x2 = self.base_integer_chip().int_square(&x);
         let x3 = self.base_integer_chip().int_mul(&x2, &x);
+        let ax = self.base_integer_chip().int_mul(&x, &a);
         let right = self.base_integer_chip().int_add(&x3, &b);
+        let right = self.base_integer_chip().int_add(&right, &ax);
 
         let eq = self.base_integer_chip().is_int_equal(&y2, &right);
         let eq_or_identity = self.base_integer_chip().base_chip().or(&eq, &z);
