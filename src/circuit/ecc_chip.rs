@@ -469,16 +469,20 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
         let y = self.base_integer_chip().assign_w(&field_to_bn(&y));
         let z = self.base_integer_chip().base_chip().assign_bit(z);
 
-        // Constrain y^2 = x^3 ax + b
+        // Constrain y^2 = x^3 + ax + b
         // TODO: Optimize b
-        let a = self.base_integer_chip().assign_int_constant(C::a());
         let b = self.base_integer_chip().assign_int_constant(C::b());
         let y2 = self.base_integer_chip().int_square(&y);
         let x2 = self.base_integer_chip().int_square(&x);
         let x3 = self.base_integer_chip().int_mul(&x2, &x);
-        let ax = self.base_integer_chip().int_mul(&x, &a);
         let right = self.base_integer_chip().int_add(&x3, &b);
-        let right = self.base_integer_chip().int_add(&right, &ax);
+        let right = if bool::from(C::a().ct_is_zero()) {
+            right
+        } else {
+            let a = self.base_integer_chip().assign_int_constant(C::a());
+            let ax = self.base_integer_chip().int_mul(&x, &a);
+            self.base_integer_chip().int_add(&right, &ax)
+        };
 
         let eq = self.base_integer_chip().is_int_equal(&y2, &right);
         let eq_or_identity = self.base_integer_chip().base_chip().or(&eq, &z);
@@ -504,14 +508,18 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
 
         // Constrain y^2 = x^3 +ax + b
         // TODO: Optimize b
-        let a = self.base_integer_chip().assign_int_constant(C::a());
         let b = self.base_integer_chip().assign_int_constant(C::b());
         let y2 = self.base_integer_chip().int_square(&y);
         let x2 = self.base_integer_chip().int_square(&x);
         let x3 = self.base_integer_chip().int_mul(&x2, &x);
-        let ax = self.base_integer_chip().int_mul(&x, &a);
         let right = self.base_integer_chip().int_add(&x3, &b);
-        let right = self.base_integer_chip().int_add(&right, &ax);
+        let right = if bool::from(C::a().ct_is_zero()) {
+            right
+        } else {
+            let a = self.base_integer_chip().assign_int_constant(C::a());
+            let ax = self.base_integer_chip().int_mul(&x, &a);
+            self.base_integer_chip().int_add(&right, &ax)
+        };
 
         self.base_integer_chip().assert_int_equal(&y2, &right);
         AssignedNonZeroPoint::new(x, y)
@@ -534,8 +542,6 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
         )
     }
 
-    /// cond == 1 return a
-    /// cond == 0 return b
     fn bisec_point(
         &mut self,
         cond: &AssignedCondition<N>,
@@ -601,7 +607,7 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
             t
         };
 
-        // (a.x - cx)*lambda - a.y
+        // cy = (a.x - cx)*lambda - a.y
         let cy = {
             let t = self.base_integer_chip().int_sub(&a.x, &cx);
             let t = self.base_integer_chip().int_mul(&t, l);
@@ -689,13 +695,17 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
     ) -> AssignedPointWithCurvature<C, N> {
         let a = self.ecc_reduce(a);
 
-        // 3 * x ^ 2 + A / 2 * y
+        // 3 * x ^ 2 + C::a() / 2 * y
         let x_square = self.base_integer_chip().int_square(&a.x);
         let numerator = self
             .base_integer_chip()
             .int_mul_small_constant(&x_square, 3);
-        let param_a = self.base_integer_chip().assign_int_constant(C::a());
-        let numerator = self.base_integer_chip().int_add(&numerator, &param_a);
+        let numerator = if bool::from(C::a().ct_is_zero()) {
+            numerator
+        } else {
+            let param_a = self.base_integer_chip().assign_int_constant(C::a());
+            self.base_integer_chip().int_add(&numerator, &param_a)
+        };
         let denominator = self.base_integer_chip().int_mul_small_constant(&a.y, 2);
 
         let (z, v) = self.base_integer_chip().int_div(&numerator, &denominator);
@@ -707,13 +717,17 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
         &mut self,
         a: AssignedPoint<C, N>,
     ) -> AssignedPointWithCurvature<C, N> {
-        // 3 * x ^ 2 + A / 2 * y
+        // 3 * x ^ 2 + C::a() / 2 * y
         let x_square = self.base_integer_chip().int_square(&a.x);
         let numerator = self
             .base_integer_chip()
             .int_mul_small_constant(&x_square, 3);
-        let param_a = self.base_integer_chip().assign_int_constant(C::a());
-        let numerator = self.base_integer_chip().int_add(&numerator, &param_a);
+        let numerator = if bool::from(C::a().ct_is_zero()) {
+            numerator
+        } else {
+            let param_a = self.base_integer_chip().assign_int_constant(C::a());
+            self.base_integer_chip().int_add(&numerator, &param_a)
+        };
         let denominator = self.base_integer_chip().int_mul_small_constant(&a.y, 2);
 
         let (z, v) = self.base_integer_chip().int_div(&numerator, &denominator);
@@ -840,7 +854,7 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
             t
         };
 
-        // lambda*(a.x - cx) - a.y
+        // cy = lambda*(a.x - cx) - a.y
         let cy = {
             let t = self.base_integer_chip().int_sub(&a.x, &cx);
             let t = self.base_integer_chip().int_mul(&t, l);
@@ -875,13 +889,17 @@ pub trait EccChipBaseOps<C: CurveAffine, N: FieldExt>:
         &mut self,
         a: &AssignedNonZeroPoint<C, N>,
     ) -> Result<AssignedNonZeroPoint<C, N>, UnsafeError> {
-        // 3 * x ^ 2 + A / 2 * y
+        // 3 * x ^ 2 + C::a() / 2 * y
         let x_square = self.base_integer_chip().int_square(&a.x);
         let numerator = self
             .base_integer_chip()
             .int_mul_small_constant(&x_square, 3);
-        let param_a = self.base_integer_chip().assign_int_constant(C::a());
-        let numerator = self.base_integer_chip().int_add(&numerator, &param_a);
+        let numerator = if bool::from(C::a().ct_is_zero()) {
+            numerator
+        } else {
+            let param_a = self.base_integer_chip().assign_int_constant(C::a());
+            self.base_integer_chip().int_add(&numerator, &param_a)
+        };
         let denominator = self.base_integer_chip().int_mul_small_constant(&a.y, 2);
 
         let (z, v) = self.base_integer_chip().int_div(&numerator, &denominator);
